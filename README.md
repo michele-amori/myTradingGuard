@@ -1,52 +1,50 @@
 # ⚡ MyTradingGuard
 
-Software di autodisciplina per il trading su TradingView Desktop (macOS).
-Blocca l'invio di ordini al broker se le regole impostate non sono soddisfatte.
+A trading discipline tool for TradingView Desktop on macOS.
+Blocks orders from reaching the broker when your configured rules are not met.
 
-## Come funziona
+## How it works
 
 ```
-TradingView App ──► [Proxy locale :8080] ──► Tradovate API
-                            │
-                      Controlla regole:
-                      • Fascia oraria ✓/✗
-                      • Cooldown ✓/✗  
-                      • Max trade/giorno ✓/✗
+TradingView App ──► [Local Proxy :8080] ──► Tradovate API
+                             │
+                       Checks rules:
+                       • Time window  ✓/✗
+                       • Cooldown     ✓/✗
+                       • Max daily trades ✓/✗
 ```
 
-Il proxy intercetta le chiamate HTTP che TradingView invia a Tradovate.
-Se le regole non sono soddisfatte, la richiesta viene bloccata **prima**
-di raggiungere il broker — l'ordine non parte.
+The proxy intercepts HTTP requests that TradingView Desktop sends to Tradovate.
+If any rule is violated, the request is blocked **before** it reaches the broker — the order never goes through.
 
 ---
 
-## Installazione (una tantum)
+## Installation (one-time setup)
 
-### 1. Installa le dipendenze
+### 1. Install dependencies
 
 ```bash
 pip3 install -r requirements.txt
 ```
 
-### 2. Esegui il setup macOS
+### 2. Run the macOS setup script
 
 ```bash
 bash setup_macos.sh
 ```
 
-Questo script:
-- Genera il certificato SSL di mitmproxy
-- Lo installa nel Keychain di sistema come **trusted** (richiede password admin)
-- Configura il proxy di sistema su Wi-Fi (porta 8080)
+This script:
+- Generates the mitmproxy SSL certificate
+- Installs it in the System Keychain as **trusted** (requires admin password)
 
-> ⚠️ Il certificato è necessario per intercettare il traffico HTTPS.
-> È generato localmente sul tuo Mac e non viene mai trasmesso.
+> ⚠️ The certificate is required to intercept HTTPS traffic.
+> It is generated locally on your Mac and never transmitted anywhere.
 
 ---
 
-## Configurazione regole
+## Configuration
 
-Modifica `config.json`:
+Edit `config.json` to define your rules:
 
 ```json
 {
@@ -63,103 +61,103 @@ Modifica `config.json`:
 }
 ```
 
-| Campo | Descrizione |
+| Field | Description |
 |-------|-------------|
-| `time_windows` | Fasce orarie in cui il trading è **permesso**. Fuori da questi orari gli ordini vengono bloccati. |
-| `timezone` | Timezone per le fasce orarie (`America/New_York`, `Europe/Rome`, ecc.) |
-| `cooldown_minutes` | Minuti di attesa obbligatoria dopo ogni operazione. `0` = disabilitato |
-| `max_daily_trades` | Numero massimo di ordini al giorno. `0` = disabilitato |
-| `broker` | `tradovate` oppure `interactive_brokers` |
-| `broker_env` | `live` oppure `demo` |
+| `time_windows` | Time ranges during which trading is **allowed**. Orders outside these windows are blocked. |
+| `timezone` | Timezone for the time windows (e.g. `America/New_York`, `Europe/Rome`) |
+| `cooldown_minutes` | Mandatory wait time after each trade. `0` = disabled |
+| `max_daily_trades` | Maximum number of orders per day. `0` = disabled |
+| `broker` | `tradovate` or `interactive_brokers` |
+| `broker_env` | `live` or `demo` |
 
-**La configurazione viene riletta automaticamente** ogni volta che salvi il file — non devi riavviare MyTradingGuard.
+**Configuration is reloaded automatically** whenever you save the file — no restart needed.
 
 ---
 
-## Uso quotidiano
+## Daily usage
 
 ```bash
-python main.py
+bash start.sh
 ```
 
-Si apre il dashboard nel terminale:
+This launches the proxy and opens TradingView Desktop with the proxy active. A live dashboard is shown in the terminal:
 
 ```
-╔═══════════════════════════════╗
-║       ⚡ MyTradingGuard            ║
-║  Friday 06 Mar 2026  10:42:33 ║
-╚═══════════════════════════════╝
+╔══════════════════════════════════╗
+║       ⚡ MyTradingGuard          ║
+║  Friday 06 Mar 2026  10:42:33    ║
+╚══════════════════════════════════╝
 
-┌─ Regole Attive ──────────────────────────────┐
-│ 🟢  Fascia Oraria        09:30–11:30 ✓       │
-│ 🔴  Cooldown (5min)      Sblocco tra 3m 12s  │
-│ 🟢  Max Op/Giorno        ████░░░░░░  2/3      │
+┌─ Active Rules ───────────────────────────────┐
+│ 🟢  Time Window       09:30–11:30 ✓          │
+│ 🔴  Cooldown (5min)   Unlocks in 3m 12s      │
+│ 🟢  Max Daily Trades  ████░░░░░░  2/3        │
 └──────────────────────────────────────────────┘
 
-         🚫  TRADING BLOCCATO
+         🚫  TRADING BLOCKED
 
-┌─ Ultimi eventi ──────────────────────────────┐
-│ 10:41:15  🔴 BLOCCO  Cooldown attivo: ...    │
-│ 10:38:02  🟢 PASS    LONG NQ                 │
+┌─ Recent Events ──────────────────────────────┐
+│ 10:41:15  🔴 BLOCKED  Cooldown active: ...   │
+│ 10:38:02  🟢 PASSED   LONG NQ                │
 └──────────────────────────────────────────────┘
 ```
+
+Press `Ctrl+C` to stop the proxy and exit.
 
 ---
 
-## Rimuovere il proxy
-
-Quando hai finito di usare MyTradingGuard (o hai problemi di connessione):
+## Stopping the proxy
 
 ```bash
 bash teardown_macos.sh
 ```
 
-Questo disabilita il proxy di sistema — la connessione torna diretta.
+Kills the proxy process and closes TradingView.
 
 ---
 
-## Struttura del progetto
+## Project structure
 
 ```
 mytradingguard/
-├── main.py           # Entry point + dashboard terminale
-├── proxy_addon.py    # Addon mitmproxy — intercetta gli ordini
-├── rules_engine.py   # Motore delle regole
-├── trade_state.py    # Stato giornaliero (persistente)
-├── config.py         # Caricamento configurazione
-├── config.json       # ← Personalizza qui le tue regole
-├── setup_macos.sh    # Setup macOS (eseguire una volta)
-├── teardown_macos.sh # Rimuovi proxy
+├── main.py           # Entry point + terminal dashboard
+├── proxy_addon.py    # mitmproxy addon — intercepts orders
+├── rules_engine.py   # Rules evaluation logic
+├── trade_state.py    # Daily state (persisted to disk)
+├── config.py         # Configuration loader
+├── config.json       # ← Edit your rules here
+├── notifier.py       # Sound alerts on block/allow
+├── start.sh          # Daily launcher
+├── setup_macos.sh    # One-time macOS setup
+├── teardown_macos.sh # Stop proxy
+├── debug_proxy.py    # Debug tool — logs all Tradovate traffic
 └── requirements.txt
 ```
 
 ---
 
-## Aggiungere un nuovo broker
+## Adding a new broker
 
-Modifica `BROKER_PATTERNS` in `proxy_addon.py`:
+Edit `BROKER_PATTERNS` in `proxy_addon.py`:
 
 ```python
 "my_broker": {
     "hosts": ["api.mybroker.com"],
     "order_paths": [r"/v1/orders", r"/api/place"],
+    "order_body_params": ["symbol", "side", "qty"],
     "success_field": "order_id",
 },
 ```
 
 ---
 
-## Risoluzione problemi
+## Troubleshooting
 
-**TradingView non si connette dopo il setup**
-→ Assicurati che `python main.py` sia in esecuzione prima di aprire TradingView.
+**TradingView does not connect after setup**
+→ Make sure `bash start.sh` is running before opening TradingView.
 
-**Errore certificato SSL**
-→ Apri Keychain Access → Sistema → cerca "mitmproxy" → doppio click → Fidati sempre.
+**SSL certificate error**
+→ Open Keychain Access → System → search "mitmproxy" → double-click → Always Trust.
 
-**Il proxy blocca siti non legati al broker**
-→ Normale: mitmproxy fa da proxy per tutto il traffico, ma MyTradingGuard interviene
-  solo sugli endpoint del broker. Il resto transita invariato.
-
-**Cambiare da Wi-Fi a Ethernet**
-→ Modifica `SERVICE="Ethernet"` in entrambi gli script `.sh` e riesegui il setup.
+**Proxy blocks non-broker traffic**
+→ This is expected: mitmproxy handles all traffic, but MyTradingGuard only intercepts broker order endpoints. Everything else passes through untouched.
