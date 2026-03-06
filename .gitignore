@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# mitmproxy
+.mitmproxy/
+
+# State file (daily trade state — local only)
+~/.mytradingguard/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Compiled Swift binary
+notify_send
+notify_send.swift
+
+# Logs
+*.log
