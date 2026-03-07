@@ -29,6 +29,7 @@ from rich.text import Text
 from config import Config
 from rules_engine import RulesEngine
 from trade_state import TradeState
+from ui_state_writer import UIStateWriter
 
 console = Console()
 
@@ -264,6 +265,10 @@ def main():
 
     state = TradeState()
     engine = RulesEngine()
+
+    # Start UI state writer (feeds the native macOS app)
+    ui_writer = UIStateWriter(state=state, cfg=cfg, engine=engine)
+    ui_writer.start()
 
     # Start proxy in a separate thread
     proxy_thread = threading.Thread(

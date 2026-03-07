@@ -27,3 +27,8 @@ notify_send.swift
 
 # Logs
 *.log
+
+# Swift / Xcode build artifacts
+MyTradingGuardUI/.build/
+MyTradingGuardUI.app/
+*.resolved
