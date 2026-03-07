@@ -9,6 +9,7 @@ struct ContentView: View {
         Group {
             if let state = model.state {
                 DashboardView(state: state)
+                    .environmentObject(model)
             } else {
                 WaitingView(icon: "bolt.circle",
                             title: "MyTradingGuard",
@@ -46,11 +47,15 @@ struct WaitingView: View {
 
 struct DashboardView: View {
     let state: UIState
+    @EnvironmentObject var model: StatusModel
 
     var body: some View {
         VStack(spacing: 0) {
             HeaderView(state: state)
-            Divider()
+            if model.tvProxyStatus == .runningWithoutProxy {
+                TVWarningBanner()
+                Divider()
+            }
             HStack(alignment: .top, spacing: 0) {
                 RulesPanel(rules: state.rules)
                 Divider()
@@ -60,6 +65,28 @@ struct DashboardView: View {
             Divider()
             FooterView(state: state)
         }
+    }
+}
+
+// MARK: - TradingView warning banner
+
+struct TVWarningBanner: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("TradingView is not connected to the proxy")
+                    .font(.callout.bold())
+                Text("Orders are NOT being monitored. Quit TradingView and run start.sh to restart it correctly.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(Color.orange.opacity(0.12))
     }
 }
 

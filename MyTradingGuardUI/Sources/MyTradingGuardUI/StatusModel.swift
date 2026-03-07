@@ -53,6 +53,14 @@ struct UIState: Decodable {
     }
 }
 
+// MARK: - TradingView proxy status
+
+enum TVProxyStatus {
+    case notRunning          // TradingView is not open
+    case runningWithProxy    // TradingView is open and routed through the proxy
+    case runningWithoutProxy // TradingView is open but NOT using the proxy
+}
+
 // MARK: - Observable model
 
 @MainActor
@@ -61,6 +69,7 @@ final class StatusModel: ObservableObject {
     @Published var state: UIState? = nil
     @Published var lastUpdated: Date = .distantPast
     @Published var connectionError: String? = nil
+    @Published var tvProxyStatus: TVProxyStatus = .notRunning
 
     private let stateFile: URL
     private var timer: Timer?
@@ -82,11 +91,40 @@ final class StatusModel: ObservableObject {
         reload()
     }
 
+    private func checkTradingView() {
+        let task = Process()
+        task.launchPath = "/bin/ps"
+        task.arguments = ["aux"]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+        do {
+            try task.run()
+            task.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8) ?? ""
+            let lines = output.components(separatedBy: "\n")
+            let tvLines = lines.filter {
+                $0.contains("TradingView") && !$0.contains("grep") && !$0.contains("MyTradingGuard")
+            }
+            if tvLines.isEmpty {
+                tvProxyStatus = .notRunning
+            } else if tvLines.contains(where: { $0.contains("proxy-server") }) {
+                tvProxyStatus = .runningWithProxy
+            } else {
+                tvProxyStatus = .runningWithoutProxy
+            }
+        } catch {
+            tvProxyStatus = .notRunning
+        }
+    }
+
     private func reload() {
         guard FileManager.default.fileExists(atPath: stateFile.path) else {
             connectionError = "Waiting for MyTradingGuard to start…"
             return
         }
+        checkTradingView()
         do {
             let data = try Data(contentsOf: stateFile)
             let decoded = try JSONDecoder().decode(UIState.self, from: data)
