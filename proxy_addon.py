@@ -75,6 +75,8 @@ class MyTradingGuardAddon:
             sound_enabled=cfg.sound_enabled,
             notify_allowed=cfg.notify_allowed,
         )
+        # Position snapshot for loss detection: {position_key: position_dict}
+        self._last_positions: dict = {}
         print(f"[MyTradingGuard] Addon active — broker: {cfg.broker} ({cfg.broker_env})")
 
     # ------------------------------------------------------------------ #
@@ -91,19 +93,32 @@ class MyTradingGuardAddon:
         except Exception:
             pass
 
+        # Check all standard rules (time window, cooldown, max trades, max losses)
         ok, reason = self.engine.check_all(self.state, self.cfg)
-
         if not ok:
             self._block(flow, reason)
-        else:
-            self._log("ALLOWED", flow.request.path)
-            self.notifier.allowed(flow.request.path)
+            return
+
+        # Check order size (per-order rule, needs qty from request body)
+        qty = self._extract_qty(flow)
+        ok_size, reason_size = self.engine.check_order_size(qty, self.cfg)
+        if not ok_size:
+            self._block(flow, reason_size)
+            return
+
+        self._log("ALLOWED", flow.request.path)
+        self.notifier.allowed(flow.request.path)
 
     # ------------------------------------------------------------------ #
     #  Hook: RESPONSE                                                     #
     # ------------------------------------------------------------------ #
 
     def response(self, flow: http.HTTPFlow) -> None:
+        # Track position changes to detect losing trades
+        if self._is_positions_response(flow):
+            self._track_positions(flow)
+            return
+
         if not self._is_order_request(flow):
             return
 
@@ -124,6 +139,77 @@ class MyTradingGuardAddon:
     # ------------------------------------------------------------------ #
     #  Private helpers                                                     #
     # ------------------------------------------------------------------ #
+
+    def _is_positions_response(self, flow: http.HTTPFlow) -> bool:
+        """True if this is a GET positions response from the broker."""
+        if flow.request.method != "GET":
+            return False
+        host = flow.request.pretty_host
+        path = flow.request.path
+        if not any(h in host for h in self._patterns.get("hosts", [])):
+            return False
+        return bool(re.search(r"/accounts/\w+/positions", path))
+
+    def _track_positions(self, flow: http.HTTPFlow) -> None:
+        """
+        Compares the current positions snapshot with the previous one.
+        When a position closes (netPos goes to 0 or disappears) and
+        soldValue - boughtValue < 0, records a loss.
+        """
+        if flow.response.status_code not in (200, 201):
+            return
+        try:
+            data = json.loads(flow.response.content)
+            positions = data if isinstance(data, list) else data.get("positions", [])
+            if not isinstance(positions, list):
+                return
+
+            # Build current snapshot keyed by position id (fallback to contractId)
+            current: dict = {}
+            for p in positions:
+                key = p.get("id") or p.get("contractId")
+                if key is not None:
+                    current[key] = p
+
+            # Compare with previous snapshot
+            for key, prev in self._last_positions.items():
+                prev_net = int(prev.get("netPos", 0))
+                if prev_net == 0:
+                    continue  # was already flat, skip
+
+                curr = current.get(key)
+                curr_net = int(curr.get("netPos", 0)) if curr else 0
+
+                if curr_net == 0:
+                    # Position just closed — check P&L
+                    sold_val   = float(prev.get("soldValue", 0))
+                    bought_val = float(prev.get("boughtValue", 0))
+                    pnl = sold_val - bought_val
+                    symbol = str(prev.get("contractId", ""))
+
+                    if pnl < 0:
+                        self.state.record_loss(pnl=pnl, symbol=symbol)
+                        self._log("LOSS", f"Losing trade — P&L: {pnl:.2f} ({symbol})")
+                    else:
+                        self._log("WIN", f"Winning trade — P&L: {pnl:.2f} ({symbol})")
+
+            self._last_positions = current
+
+        except Exception as e:
+            self._log("WARN", f"Position tracking failed: {e}")
+
+    def _extract_qty(self, flow: http.HTTPFlow) -> int:
+        """Extracts the order quantity from the request body."""
+        try:
+            from urllib.parse import parse_qs
+            body_str = flow.request.content.decode("utf-8", errors="replace")
+            params = parse_qs(body_str)
+            if params:
+                return int(params.get("qty", ["0"])[0])
+            body = json.loads(body_str)
+            return int(body.get("qty", body.get("quantity", 0)))
+        except Exception:
+            return 0
 
     def _is_order_request(self, flow: http.HTTPFlow) -> bool:
         """True if the request is an order to the configured broker."""

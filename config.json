@@ -41,12 +41,10 @@
   "max_daily_trades": 3,
 
   "broker": "tradovate",
-
   "broker_env": "demo",
-
   "proxy_port": 8080,
-
   "sound_enabled": true,
-
-  "notify_allowed": false
+  "notify_allowed": false,
+  "max_daily_losses": 2,
+  "max_order_size": 2
 }

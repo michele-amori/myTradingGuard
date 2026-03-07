@@ -26,6 +26,7 @@ class RulesEngine:
             self.check_time_window,
             self.check_cooldown,
             self.check_max_trades,
+            self.check_max_losses,
         ]
         for check in checks:
             ok, msg = check(state, cfg)
@@ -101,6 +102,39 @@ class RulesEngine:
         return (
             False,
             f"Daily limit reached: {count}/{cfg.max_daily_trades} trades",
+        )
+
+    # ------------------------------------------------------------------ #
+    #  Rule 4 — Max daily losing trades                                   #
+    # ------------------------------------------------------------------ #
+
+    def check_max_losses(self, state: "TradeState", cfg: "Config") -> tuple[bool, str]:
+        if cfg.max_daily_losses <= 0:
+            return True, ""
+
+        losses = state.daily_losses
+        if losses < cfg.max_daily_losses:
+            return True, ""
+
+        return (
+            False,
+            f"Max losing trades reached: {losses}/{cfg.max_daily_losses} losses today",
+        )
+
+    # ------------------------------------------------------------------ #
+    #  Rule 5 — Max order size (checked per-order, needs qty from request) #
+    # ------------------------------------------------------------------ #
+
+    def check_order_size(self, qty: int, cfg: "Config") -> tuple[bool, str]:
+        if cfg.max_order_size <= 0:
+            return True, ""
+
+        if qty <= cfg.max_order_size:
+            return True, ""
+
+        return (
+            False,
+            f"Order size too large: {qty} contracts (max allowed: {cfg.max_order_size})",
         )
 
 

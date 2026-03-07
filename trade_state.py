@@ -18,6 +18,7 @@ class TradeState:
         self._state: dict = {
             "date": str(date.today()),
             "daily_count": 0,
+            "daily_losses": 0,
             "last_trade_time": None,
         }
         self._events: list[dict] = []   # in-memory log of the last N events
@@ -50,6 +51,7 @@ class TradeState:
             self._state = {
                 "date": today,
                 "daily_count": 0,
+                "daily_losses": 0,
                 "last_trade_time": None,
             }
 
@@ -66,6 +68,19 @@ class TradeState:
             self._state["last_trade_time"] = now.isoformat()
             self._save()
             self._add_event("PASSED", f"{direction} {symbol}".strip() or "order", now)
+
+    def record_loss(self, pnl: float = 0.0, symbol: str = ""):
+        """Records a losing trade (closed at a loss)."""
+        with self._lock:
+            self._ensure_today()
+            self._state["daily_losses"] = self._state.get("daily_losses", 0) + 1
+            self._save()
+            detail = f"Loss #{self._state['daily_losses']}"
+            if symbol:
+                detail += f" — {symbol}"
+            if pnl:
+                detail += f" (P&L: {pnl:.2f})"
+            self._add_event("LOSS", detail, datetime.now())
 
     def record_block(self, reason: str):
         """Records a blocked order."""
@@ -86,6 +101,12 @@ class TradeState:
         with self._lock:
             self._ensure_today()
             return self._state["daily_count"]
+
+    @property
+    def daily_losses(self) -> int:
+        with self._lock:
+            self._ensure_today()
+            return self._state.get("daily_losses", 0)
 
     @property
     def last_trade_time(self) -> Optional[datetime]:

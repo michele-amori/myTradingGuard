@@ -22,6 +22,10 @@ class Config:
     cooldown_minutes: int = 5
     # Maximum number of trades per day (0 = disabled)
     max_daily_trades: int = 3
+    # Maximum number of losing trades per day before trading is blocked (0 = disabled)
+    max_daily_losses: int = 0
+    # Maximum order size in contracts (0 = disabled)
+    max_order_size: int = 0
     # Broker: "tradovate" | "interactive_brokers"
     broker: str = "tradovate"
     # Broker environment: "live" | "demo"
@@ -48,6 +52,8 @@ class Config:
             timezone=raw.get("timezone", "America/New_York"),
             cooldown_minutes=int(raw.get("cooldown_minutes", 5)),
             max_daily_trades=int(raw.get("max_daily_trades", 3)),
+            max_daily_losses=int(raw.get("max_daily_losses", 0)),
+            max_order_size=int(raw.get("max_order_size", 0)),
             broker=raw.get("broker", "tradovate"),
             broker_env=raw.get("broker_env", "demo"),
             proxy_port=int(raw.get("proxy_port", 8080)),

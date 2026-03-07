@@ -110,8 +110,30 @@ def build_dashboard(state: TradeState, cfg: Config, engine: RulesEngine) -> Tabl
         f"[green]{detail_max}[/green]" if ok_max else f"[red]{detail_max}[/red]",
     )
 
+    # Rule 4: Max daily losses
+    ok_loss, msg_loss = engine.check_max_losses(state, cfg)
+    losses = state.daily_losses
+    if cfg.max_daily_losses > 0:
+        bar_loss = _progress_bar(losses, cfg.max_daily_losses)
+        detail_loss = f"{bar_loss}  {losses}/{cfg.max_daily_losses}"
+    else:
+        detail_loss = "Disabled"
+    rules_table.add_row(
+        "🟢" if ok_loss else "🔴",
+        "Max Daily Losses",
+        f"[green]{detail_loss}[/green]" if ok_loss else f"[red]{detail_loss}[/red]",
+    )
+
+    # Rule 5: Max order size (static display)
+    if cfg.max_order_size > 0:
+        rules_table.add_row(
+            "🟢",
+            "Max Order Size",
+            f"[green]Max {cfg.max_order_size} contract(s) per order[/green]",
+        )
+
     # Global status
-    all_ok = ok_time and ok_cd and ok_max
+    all_ok = ok_time and ok_cd and ok_max and ok_loss
     global_status = (
         Panel("[bold green]✅  TRADING ENABLED[/bold green]", style="green")
         if all_ok
@@ -140,6 +162,12 @@ def build_dashboard(state: TradeState, cfg: Config, engine: RulesEngine) -> Tabl
             elif kind == "PASSED":
                 style = "green"
                 icon = "🟢 PASSED"
+            elif kind == "LOSS":
+                style = "red"
+                icon = "📉 LOSS"
+            elif kind == "WIN":
+                style = "green"
+                icon = "📈 WIN"
             else:
                 style = "dim"
                 icon = f"• {kind}"
