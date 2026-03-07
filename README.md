@@ -87,7 +87,15 @@ cd ~/Desktop/MyTradingGuard
 bash start.sh
 ```
 
-This starts the proxy in the background and opens TradingView Desktop with the proxy active. A terminal window will remain open — **do not close it** while you are trading.
+The script handles TradingView automatically:
+
+| Situation | What happens |
+|-----------|--------------|
+| TradingView is **not open** | It is launched automatically with the proxy active |
+| TradingView is **already open with the proxy** | Nothing changes — MyTradingGuard connects to it as-is |
+| TradingView is **open but without the proxy** | It is closed and relaunched with the proxy active |
+
+A terminal window will remain open — **do not close it** while you are trading.
 
 Then open **MyTradingGuard** from your Applications folder. The app shows the live status of all your rules and a log of recent events.
 
