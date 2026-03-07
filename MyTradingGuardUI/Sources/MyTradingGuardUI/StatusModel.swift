@@ -72,7 +72,8 @@ final class StatusModel: ObservableObject {
     @Published var tvProxyStatus: TVProxyStatus = .notRunning
 
     private let stateFile: URL
-    private var timer: Timer?
+    private var stateTimer: Timer?
+    private var tvCheckTimer: Timer?
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -83,14 +84,19 @@ final class StatusModel: ObservableObject {
     }
 
     func start() {
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.reload()
-            }
+        // Reload ui_state.json every second
+        stateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.reload() }
+        }
+        // Check TradingView proxy status every 10 seconds
+        tvCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.checkTradingView() }
         }
         reload()
+        checkTradingView()
     }
 
+    // Called once at startup, then every 10 seconds
     private func checkTradingView() {
         let task = Process()
         task.launchPath = "/bin/ps"
@@ -124,7 +130,6 @@ final class StatusModel: ObservableObject {
             connectionError = "Waiting for MyTradingGuard to start…"
             return
         }
-        checkTradingView()
         do {
             let data = try Data(contentsOf: stateFile)
             let decoded = try JSONDecoder().decode(UIState.self, from: data)
