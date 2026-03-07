@@ -1,6 +1,8 @@
 """
 RulesEngine — evaluates trading rules against the current state.
 Each rule returns (ok: bool, message: str).
+
+Rules are skipped entirely if their "active" flag is False in config.json.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ class RulesEngine:
         """
         Runs all checks in order.
         Returns (True, "") if all pass, (False, reason) on first failure.
+        Inactive rules are skipped.
         """
         checks = [
             self.check_time_window,
@@ -39,25 +42,24 @@ class RulesEngine:
     # ------------------------------------------------------------------ #
 
     def check_time_window(self, state: "TradeState", cfg: "Config") -> tuple[bool, str]:
-        if not cfg.time_windows:
+        rule = cfg.time_window
+        if not rule.active or not rule.windows:
             return True, ""
 
-        tz = pytz.timezone(cfg.timezone)
+        tz = pytz.timezone(rule.timezone)
         now = datetime.now(tz)
         now_time = now.time()
 
-        for window in cfg.time_windows:
+        for window in rule.windows:
             start = _parse_time(window["start"])
             end = _parse_time(window["end"])
             if start <= now_time <= end:
                 return True, ""
 
-        windows_str = ", ".join(
-            f"{w['start']}–{w['end']}" for w in cfg.time_windows
-        )
+        windows_str = ", ".join(f"{w['start']}–{w['end']}" for w in rule.windows)
         return (
             False,
-            f"Outside trading hours. Allowed windows: {windows_str} ({cfg.timezone})",
+            f"Outside trading hours. Allowed windows: {windows_str} ({rule.timezone})",
         )
 
     # ------------------------------------------------------------------ #
@@ -65,7 +67,8 @@ class RulesEngine:
     # ------------------------------------------------------------------ #
 
     def check_cooldown(self, state: "TradeState", cfg: "Config") -> tuple[bool, str]:
-        if cfg.cooldown_minutes <= 0:
+        rule = cfg.cooldown
+        if not rule.active or rule.minutes <= 0:
             return True, ""
 
         last = state.last_trade_time
@@ -73,7 +76,7 @@ class RulesEngine:
             return True, ""
 
         elapsed = datetime.now() - last
-        required = timedelta(minutes=cfg.cooldown_minutes)
+        required = timedelta(minutes=rule.minutes)
 
         if elapsed >= required:
             return True, ""
@@ -92,16 +95,17 @@ class RulesEngine:
     # ------------------------------------------------------------------ #
 
     def check_max_trades(self, state: "TradeState", cfg: "Config") -> tuple[bool, str]:
-        if cfg.max_daily_trades <= 0:
+        rule = cfg.max_daily_trades
+        if not rule.active or rule.value <= 0:
             return True, ""
 
         count = state.daily_count
-        if count < cfg.max_daily_trades:
+        if count < rule.value:
             return True, ""
 
         return (
             False,
-            f"Daily limit reached: {count}/{cfg.max_daily_trades} trades",
+            f"Daily limit reached: {count}/{rule.value} trades",
         )
 
     # ------------------------------------------------------------------ #
@@ -109,32 +113,34 @@ class RulesEngine:
     # ------------------------------------------------------------------ #
 
     def check_max_losses(self, state: "TradeState", cfg: "Config") -> tuple[bool, str]:
-        if cfg.max_daily_losses <= 0:
+        rule = cfg.max_daily_losses
+        if not rule.active or rule.value <= 0:
             return True, ""
 
         losses = state.daily_losses
-        if losses < cfg.max_daily_losses:
+        if losses < rule.value:
             return True, ""
 
         return (
             False,
-            f"Max losing trades reached: {losses}/{cfg.max_daily_losses} losses today",
+            f"Max losing trades reached: {losses}/{rule.value} losses today",
         )
 
     # ------------------------------------------------------------------ #
-    #  Rule 5 — Max order size (checked per-order, needs qty from request) #
+    #  Rule 5 — Max order size (per-order, needs qty from request body)   #
     # ------------------------------------------------------------------ #
 
     def check_order_size(self, qty: int, cfg: "Config") -> tuple[bool, str]:
-        if cfg.max_order_size <= 0:
+        rule = cfg.max_order_size
+        if not rule.active or rule.value <= 0:
             return True, ""
 
-        if qty <= cfg.max_order_size:
+        if qty <= rule.value:
             return True, ""
 
         return (
             False,
-            f"Order size too large: {qty} contracts (max allowed: {cfg.max_order_size})",
+            f"Order size too large: {qty} contracts (max allowed: {rule.value})",
         )
 
 

@@ -1,50 +1,44 @@
 {
-  "_comment": "MyTradingGuard — configurazione regole",
+  "rules": {
 
-  "time_windows": [
-    {
-      "_comment": "macro",
-      "start": "09:33",
-      "end": "10:15"
+    "time_window": {
+      "active": true,
+      "timezone": "America/New_York",
+      "windows": [
+        { "start": "09:33", "end": "10:15" },
+        { "start": "10:42", "end": "11:15" },
+        { "start": "11:42", "end": "12:15" },
+        { "start": "12:42", "end": "13:15" },
+        { "start": "13:42", "end": "14:15" },
+        { "start": "14:42", "end": "15:15" }
+      ]
     },
-    {
-      "_comment": "macro",
-      "start": "10:42",
-      "end": "11:15"
+
+    "cooldown": {
+      "active": true,
+      "minutes": 30
     },
-    {
-      "_comment": "macro",
-      "start": "11:42",
-      "end": "12:15"
+
+    "max_daily_trades": {
+      "active": true,
+      "value": 3
     },
-    {
-      "_comment": "macro",
-      "start": "12:42",
-      "end": "13:15"
+
+    "max_daily_losses": {
+      "active": true,
+      "value": 2
     },
-    {
-      "_comment": "macro",
-      "start": "13:42",
-      "end": "14:15"
-    },
-    {
-      "_comment": "macro",
-      "start": "14:42",
-      "end": "15:15"
+
+    "max_order_size": {
+      "active": true,
+      "value": 2
     }
-  ],
 
-  "timezone": "America/New_York",
-
-  "cooldown_minutes": 30,
-
-  "max_daily_trades": 3,
+  },
 
   "broker": "tradovate",
   "broker_env": "demo",
   "proxy_port": 8080,
   "sound_enabled": true,
-  "notify_allowed": false,
-  "max_daily_losses": 2,
-  "max_order_size": 2
+  "notify_allowed": false
 }

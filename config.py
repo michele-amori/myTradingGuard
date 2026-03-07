@@ -1,5 +1,9 @@
 """
 Config — loads and validates configuration from config.json.
+
+Each rule is stored as a nested object with an "active" flag:
+  "cooldown": { "active": true, "minutes": 30 }
+Setting "active": false disables the rule without changing its value.
 """
 
 from __future__ import annotations
@@ -12,29 +16,57 @@ from pathlib import Path
 CONFIG_FILE = Path(__file__).parent / "config.json"
 
 
+# ------------------------------------------------------------------ #
+#  Per-rule dataclasses                                               #
+# ------------------------------------------------------------------ #
+
+@dataclass
+class TimeWindowRule:
+    active: bool = True
+    timezone: str = "America/New_York"
+    windows: list[dict] = field(default_factory=list)
+
+
+@dataclass
+class CooldownRule:
+    active: bool = True
+    minutes: int = 30
+
+
+@dataclass
+class MaxDailyTradesRule:
+    active: bool = True
+    value: int = 3
+
+
+@dataclass
+class MaxDailyLossesRule:
+    active: bool = True
+    value: int = 2
+
+
+@dataclass
+class MaxOrderSizeRule:
+    active: bool = True
+    value: int = 2
+
+
+# ------------------------------------------------------------------ #
+#  Main Config                                                        #
+# ------------------------------------------------------------------ #
+
 @dataclass
 class Config:
-    # Time windows: list of {"start": "HH:MM", "end": "HH:MM"}
-    time_windows: list[dict] = field(default_factory=list)
-    # Timezone for time windows (pytz-compatible)
-    timezone: str = "America/New_York"
-    # Cooldown minutes between trades (0 = disabled)
-    cooldown_minutes: int = 5
-    # Maximum number of trades per day (0 = disabled)
-    max_daily_trades: int = 3
-    # Maximum number of losing trades per day before trading is blocked (0 = disabled)
-    max_daily_losses: int = 0
-    # Maximum order size in contracts (0 = disabled)
-    max_order_size: int = 0
-    # Broker: "tradovate" | "interactive_brokers"
+    time_window: TimeWindowRule = field(default_factory=TimeWindowRule)
+    cooldown: CooldownRule = field(default_factory=CooldownRule)
+    max_daily_trades: MaxDailyTradesRule = field(default_factory=MaxDailyTradesRule)
+    max_daily_losses: MaxDailyLossesRule = field(default_factory=MaxDailyLossesRule)
+    max_order_size: MaxOrderSizeRule = field(default_factory=MaxOrderSizeRule)
+
     broker: str = "tradovate"
-    # Broker environment: "live" | "demo"
     broker_env: str = "demo"
-    # Local proxy port
     proxy_port: int = 8080
-    # Play sound when an order is blocked
     sound_enabled: bool = True
-    # If True, also notify when an order is allowed (green)
     notify_allowed: bool = False
 
     @classmethod
@@ -47,13 +79,40 @@ class Config:
         with open(path) as f:
             raw = json.load(f)
 
+        rules = raw.get("rules", {})
+
+        def _rule(key: dict, defaults: dict) -> dict:
+            r = rules.get(key, {})
+            return {**defaults, **r}
+
+        tw = _rule("time_window", {"active": True, "timezone": "America/New_York", "windows": []})
+        cd = _rule("cooldown",    {"active": True, "minutes": 30})
+        mt = _rule("max_daily_trades",  {"active": True, "value": 3})
+        ml = _rule("max_daily_losses",  {"active": True, "value": 2})
+        ms = _rule("max_order_size",    {"active": True, "value": 2})
+
         cfg = cls(
-            time_windows=raw.get("time_windows", []),
-            timezone=raw.get("timezone", "America/New_York"),
-            cooldown_minutes=int(raw.get("cooldown_minutes", 5)),
-            max_daily_trades=int(raw.get("max_daily_trades", 3)),
-            max_daily_losses=int(raw.get("max_daily_losses", 0)),
-            max_order_size=int(raw.get("max_order_size", 0)),
+            time_window=TimeWindowRule(
+                active=bool(tw["active"]),
+                timezone=str(tw.get("timezone", "America/New_York")),
+                windows=list(tw.get("windows", [])),
+            ),
+            cooldown=CooldownRule(
+                active=bool(cd["active"]),
+                minutes=int(cd.get("minutes", 30)),
+            ),
+            max_daily_trades=MaxDailyTradesRule(
+                active=bool(mt["active"]),
+                value=int(mt.get("value", 3)),
+            ),
+            max_daily_losses=MaxDailyLossesRule(
+                active=bool(ml["active"]),
+                value=int(ml.get("value", 2)),
+            ),
+            max_order_size=MaxOrderSizeRule(
+                active=bool(ms["active"]),
+                value=int(ms.get("value", 2)),
+            ),
             broker=raw.get("broker", "tradovate"),
             broker_env=raw.get("broker_env", "demo"),
             proxy_port=int(raw.get("proxy_port", 8080)),
@@ -64,7 +123,7 @@ class Config:
         return cfg
 
     def _validate(self):
-        for w in self.time_windows:
+        for w in self.time_window.windows:
             if "start" not in w or "end" not in w:
                 raise ValueError(f"Malformed time window: {w}")
         if self.broker not in ("tradovate", "interactive_brokers"):
@@ -73,7 +132,7 @@ class Config:
             raise ValueError(f"broker_env must be 'live' or 'demo'")
 
     def reload(self) -> "Config":
-        """Reloads configuration from file (useful for hot-reload)."""
+        """Reloads configuration from file (hot-reload)."""
         new = Config.load()
         self.__dict__.update(new.__dict__)
         return self

@@ -38,7 +38,7 @@ console = Console()
 # ------------------------------------------------------------------ #
 
 def build_dashboard(state: TradeState, cfg: Config, engine: RulesEngine) -> Table:
-    tz = pytz.timezone(cfg.timezone)
+    tz = pytz.timezone(cfg.time_window.timezone)
     now_local = datetime.now(tz)
     now = datetime.now()
 
@@ -49,7 +49,7 @@ def build_dashboard(state: TradeState, cfg: Config, engine: RulesEngine) -> Tabl
     root.add_row(
         Panel(
             Text("⚡ MyTradingGuard", style="bold white", justify="center"),
-            subtitle=f"[dim]{now_local.strftime('%A %d %b %Y  %H:%M:%S')} {cfg.timezone}[/dim]",
+            subtitle=f"[dim]{now_local.strftime('%A %d %b %Y  %H:%M:%S')} {cfg.time_window.timezone}[/dim]",
             style="bold blue",
         )
     )
@@ -62,24 +62,32 @@ def build_dashboard(state: TradeState, cfg: Config, engine: RulesEngine) -> Tabl
 
     # Rule 1: Time window
     ok_time, msg_time = engine.check_time_window(state, cfg)
-    if cfg.time_windows:
-        windows_str = " | ".join(f"{w['start']}–{w['end']}" for w in cfg.time_windows)
-        detail_time = f"{windows_str} ({cfg.timezone})"
+    tw = cfg.time_window
+    if not tw.active:
+        detail_time = "[dim]Disabled[/dim]"
+    elif tw.windows:
+        windows_str = " | ".join(f"{w['start']}–{w['end']}" for w in tw.windows)
+        detail_time = f"{windows_str} ({tw.timezone})"
     else:
         detail_time = "No restriction"
     rules_table.add_row(
-        "🟢" if ok_time else "🔴",
+        "⚪" if not tw.active else ("🟢" if ok_time else "🔴"),
         "Time Window",
-        f"[green]{detail_time}[/green]" if ok_time else f"[red]{msg_time}[/red]",
+        detail_time if not tw.active else (
+            f"[green]{detail_time}[/green]" if ok_time else f"[red]{msg_time}[/red]"
+        ),
     )
 
     # Rule 2: Cooldown
     ok_cd, msg_cd = engine.check_cooldown(state, cfg)
+    cd = cfg.cooldown
     last = state.last_trade_time
-    if cfg.cooldown_minutes > 0:
+    if not cd.active:
+        detail_cd = "[dim]Disabled[/dim]"
+    elif cd.minutes > 0:
         if last:
             elapsed = now - last
-            remaining = timedelta(minutes=cfg.cooldown_minutes) - elapsed
+            remaining = timedelta(minutes=cd.minutes) - elapsed
             if remaining.total_seconds() > 0:
                 mins = int(remaining.total_seconds() // 60)
                 secs = int(remaining.total_seconds() % 60)
@@ -89,48 +97,57 @@ def build_dashboard(state: TradeState, cfg: Config, engine: RulesEngine) -> Tabl
         else:
             detail_cd = "No trades today"
     else:
-        detail_cd = "Disabled"
+        detail_cd = "No restriction"
     rules_table.add_row(
-        "🟢" if ok_cd else "🔴",
-        f"Cooldown ({cfg.cooldown_minutes}min)",
-        f"[green]{detail_cd}[/green]" if ok_cd else f"[red]{detail_cd}[/red]",
+        "⚪" if not cd.active else ("🟢" if ok_cd else "🔴"),
+        f"Cooldown ({cd.minutes}min)",
+        detail_cd if not cd.active else (
+            f"[green]{detail_cd}[/green]" if ok_cd else f"[red]{detail_cd}[/red]"
+        ),
     )
 
     # Rule 3: Max trades
-    ok_max, msg_max = engine.check_max_trades(state, cfg)
+    ok_max, _ = engine.check_max_trades(state, cfg)
+    mt = cfg.max_daily_trades
     count = state.daily_count
-    if cfg.max_daily_trades > 0:
-        bar = _progress_bar(count, cfg.max_daily_trades)
-        detail_max = f"{bar}  {count}/{cfg.max_daily_trades}"
+    if not mt.active:
+        detail_max = "[dim]Disabled[/dim]"
     else:
-        detail_max = "Disabled"
+        bar = _progress_bar(count, mt.value)
+        detail_max = f"{bar}  {count}/{mt.value}"
     rules_table.add_row(
-        "🟢" if ok_max else "🔴",
+        "⚪" if not mt.active else ("🟢" if ok_max else "🔴"),
         "Max Daily Trades",
-        f"[green]{detail_max}[/green]" if ok_max else f"[red]{detail_max}[/red]",
+        detail_max if not mt.active else (
+            f"[green]{detail_max}[/green]" if ok_max else f"[red]{detail_max}[/red]"
+        ),
     )
 
     # Rule 4: Max daily losses
-    ok_loss, msg_loss = engine.check_max_losses(state, cfg)
+    ok_loss, _ = engine.check_max_losses(state, cfg)
+    ml = cfg.max_daily_losses
     losses = state.daily_losses
-    if cfg.max_daily_losses > 0:
-        bar_loss = _progress_bar(losses, cfg.max_daily_losses)
-        detail_loss = f"{bar_loss}  {losses}/{cfg.max_daily_losses}"
+    if not ml.active:
+        detail_loss = "[dim]Disabled[/dim]"
     else:
-        detail_loss = "Disabled"
+        bar_loss = _progress_bar(losses, ml.value)
+        detail_loss = f"{bar_loss}  {losses}/{ml.value}"
     rules_table.add_row(
-        "🟢" if ok_loss else "🔴",
+        "⚪" if not ml.active else ("🟢" if ok_loss else "🔴"),
         "Max Daily Losses",
-        f"[green]{detail_loss}[/green]" if ok_loss else f"[red]{detail_loss}[/red]",
+        detail_loss if not ml.active else (
+            f"[green]{detail_loss}[/green]" if ok_loss else f"[red]{detail_loss}[/red]"
+        ),
     )
 
     # Rule 5: Max order size (static display)
-    if cfg.max_order_size > 0:
-        rules_table.add_row(
-            "🟢",
-            "Max Order Size",
-            f"[green]Max {cfg.max_order_size} contract(s) per order[/green]",
-        )
+    ms = cfg.max_order_size
+    rules_table.add_row(
+        "⚪" if not ms.active else "🟢",
+        "Max Order Size",
+        "[dim]Disabled[/dim]" if not ms.active else
+        f"[green]Max {ms.value} contract(s) per order[/green]",
+    )
 
     # Global status
     all_ok = ok_time and ok_cd and ok_max and ok_loss
