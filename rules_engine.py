@@ -68,7 +68,7 @@ class RulesEngine:
 
     def check_cooldown(self, state: "TradeState", cfg: "Config") -> tuple[bool, str]:
         rule = cfg.cooldown
-        if not rule.active or rule.minutes <= 0:
+        if not rule.active:
             return True, ""
 
         last = state.last_trade_time
@@ -96,7 +96,7 @@ class RulesEngine:
 
     def check_max_trades(self, state: "TradeState", cfg: "Config") -> tuple[bool, str]:
         rule = cfg.max_daily_trades
-        if not rule.active or rule.value <= 0:
+        if not rule.active:
             return True, ""
 
         count = state.daily_count
@@ -114,7 +114,7 @@ class RulesEngine:
 
     def check_max_losses(self, state: "TradeState", cfg: "Config") -> tuple[bool, str]:
         rule = cfg.max_daily_losses
-        if not rule.active or rule.value <= 0:
+        if not rule.active:
             return True, ""
 
         losses = state.daily_losses
@@ -132,7 +132,7 @@ class RulesEngine:
 
     def check_order_size(self, qty: int, cfg: "Config") -> tuple[bool, str]:
         rule = cfg.max_order_size
-        if not rule.active or rule.value <= 0:
+        if not rule.active:
             return True, ""
 
         if qty <= rule.value:
