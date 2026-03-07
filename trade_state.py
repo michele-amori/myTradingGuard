@@ -82,6 +82,23 @@ class TradeState:
                 detail += f" (P&L: {pnl:.2f})"
             self._add_event("LOSS", detail, datetime.now())
 
+    def sync_from_api(self, losses: int, trades: int):
+        """
+        Overwrites daily_losses and daily_count with authoritative data
+        fetched directly from the Tradovate API.
+        Only applies if the values from the API are >= what we already have
+        (avoids overwriting state with stale data if the call is delayed).
+        """
+        with self._lock:
+            self._ensure_today()
+            self._state["daily_losses"] = max(
+                self._state.get("daily_losses", 0), losses
+            )
+            self._state["daily_count"] = max(
+                self._state.get("daily_count", 0), trades
+            )
+            self._save()
+
     def record_block(self, reason: str):
         """Records a blocked order."""
         self._add_event("BLOCKED", reason, datetime.now())

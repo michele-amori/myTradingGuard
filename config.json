@@ -26,7 +26,7 @@
 
     "max_daily_losses": {
       "active": true,
-      "value": 2
+      "value": 3
     },
 
     "max_order_size": {

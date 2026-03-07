@@ -20,6 +20,7 @@ from config import Config
 from notifier import Notifier
 from rules_engine import RulesEngine
 from trade_state import TradeState
+from tradovate_client import TradovateClient
 
 
 # ------------------------------------------------------------------ #
@@ -75,8 +76,13 @@ class MyTradingGuardAddon:
             sound_enabled=cfg.sound_enabled,
             notify_allowed=cfg.notify_allowed,
         )
-        # Position snapshot for loss detection: {position_key: position_dict}
+        # Position snapshot for passive loss detection (fallback)
         self._last_positions: dict = {}
+
+        # Tradovate REST client — populated as soon as credentials are captured
+        self._tv_client = TradovateClient(env=cfg.broker_env)
+        self._tv_client.on_ready(self._on_credentials_ready)
+
         print(f"[MyTradingGuard] Addon active — broker: {cfg.broker} ({cfg.broker_env})")
 
     # ------------------------------------------------------------------ #
@@ -84,6 +90,10 @@ class MyTradingGuardAddon:
     # ------------------------------------------------------------------ #
 
     def request(self, flow: http.HTTPFlow) -> None:
+        # Always try to capture credentials from any broker request
+        if self._is_broker_request(flow):
+            self._capture_credentials(flow)
+
         if not self._is_order_request(flow):
             return
 
@@ -139,6 +149,52 @@ class MyTradingGuardAddon:
     # ------------------------------------------------------------------ #
     #  Private helpers                                                     #
     # ------------------------------------------------------------------ #
+
+    def _on_credentials_ready(self):
+        """
+        Called once in a background thread when accountId + token
+        are first captured. Fetches the real daily history from Tradovate
+        and syncs trade_state with accurate loss/trade counts.
+        """
+        try:
+            self._log("INFO", "Credentials captured — fetching daily history from Tradovate...")
+            losses, trades = self._tv_client.fetch_daily_losses_and_trades()
+            self.state.sync_from_api(losses=losses, trades=trades)
+            self._log("INFO", f"Daily history loaded: {trades} trade(s), {losses} loss(es) today")
+        except Exception as e:
+            self._log("WARN", f"Could not fetch daily history: {e}")
+
+    def _is_broker_request(self, flow: http.HTTPFlow) -> bool:
+        """True if the request is going to any broker host (not just orders)."""
+        if not self._patterns:
+            return False
+        host = flow.request.pretty_host
+        return any(h in host for h in self._patterns.get("hosts", []))
+
+    def _capture_credentials(self, flow: http.HTTPFlow):
+        """
+        Extracts accountId from the URL path and the Bearer token
+        from the Authorization header, then passes them to the client.
+        """
+        # accountId from path: /accounts/{accountId}/...
+        path = flow.request.path
+        m = re.search(r"/accounts/(\d+)/", path)
+        if not m:
+            return
+        try:
+            account_id = int(m.group(1))
+        except ValueError:
+            return
+
+        # Bearer token from Authorization header
+        auth = flow.request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return
+        token = auth.removeprefix("Bearer ").strip()
+        if not token:
+            return
+
+        self._tv_client.capture(account_id, token)
 
     def _is_positions_response(self, flow: http.HTTPFlow) -> bool:
         """True if this is a GET positions response from the broker."""
