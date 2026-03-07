@@ -31,4 +31,7 @@ notify_send.swift
 # Swift / Xcode build artifacts
 MyTradingGuardUI/.build/
 MyTradingGuardUI.app/
+MyTradingGuard.app/
+MyTradingGuard.dmg
+_dmg_staging/
 *.resolved
