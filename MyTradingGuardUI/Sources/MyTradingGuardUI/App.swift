@@ -4,12 +4,12 @@ import SwiftUI
 struct MyTradingGuardApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
         .commands {
-            CommandGroup(replacing: .newItem) {}   // hide "New Window"
+            CommandGroup(replacing: .newItem) {}
         }
         .defaultSize(width: 780, height: 560)
     }

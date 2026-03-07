@@ -1,16 +1,60 @@
 import SwiftUI
 
+// MARK: - Root view (handles launch state)
+
+struct RootView: View {
+    @StateObject private var launcher = LaunchManager()
+    @StateObject private var model    = StatusModel()
+
+    var body: some View {
+        Group {
+            switch launcher.launchState {
+
+            case .checkingSetup:
+                WaitingView(icon: "bolt.circle",
+                            title: "MyTradingGuard",
+                            message: "Checking setup…")
+
+            case .notConfigured:
+                WaitingView(icon: "exclamationmark.triangle",
+                            title: "Setup required",
+                            message: "Run setup_macos.sh once before using the app.\n\nOpen Terminal, go to the project folder and run:\n  bash setup_macos.sh",
+                            isWarning: true)
+
+            case .startingProxy:
+                WaitingView(icon: "bolt.circle",
+                            title: "Starting MyTradingGuard…",
+                            message: "A Terminal window has opened to start the proxy and TradingView.\nThis window will update automatically when ready.")
+
+            case .running:
+                ContentView(model: model)
+
+            case .error(let msg):
+                WaitingView(icon: "xmark.circle",
+                            title: "Error",
+                            message: msg,
+                            isWarning: true)
+            }
+        }
+        .frame(minWidth: 680, minHeight: 520)
+        .background(Color(NSColor.windowBackgroundColor))
+        .onAppear { launcher.start() }
+    }
+}
+
 // MARK: - Root window
 
 struct ContentView: View {
-    @StateObject private var model = StatusModel()
+    @ObservedObject var model: StatusModel
 
     var body: some View {
         Group {
             if let state = model.state {
                 DashboardView(state: state)
             } else {
-                WaitingView(message: model.connectionError ?? "Loading…")
+                WaitingView(icon: "bolt.circle",
+                            title: "MyTradingGuard",
+                            message: model.connectionError ?? "Loading…")
             }
         }
         .frame(minWidth: 680, minHeight: 520)
@@ -21,16 +65,21 @@ struct ContentView: View {
 // MARK: - Waiting / connecting screen
 
 struct WaitingView: View {
-    let message: String
+    var icon: String = "bolt.circle"
+    var title: String = "MyTradingGuard"
+    var message: String
+    var isWarning: Bool = false
+
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "bolt.circle")
+            Image(systemName: icon)
                 .font(.system(size: 56))
-                .foregroundStyle(.secondary)
-            Text("MyTradingGuard")
+                .foregroundStyle(isWarning ? Color.orange : Color.secondary)
+            Text(title)
                 .font(.title.bold())
             Text(message)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .padding(40)
     }
