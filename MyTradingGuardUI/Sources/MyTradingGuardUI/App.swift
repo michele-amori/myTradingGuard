@@ -4,7 +4,7 @@ import SwiftUI
 struct MyTradingGuardApp: App {
     var body: some Scene {
         WindowGroup {
-            RootView()
+            ContentView()
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)

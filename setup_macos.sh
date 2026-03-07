@@ -97,14 +97,6 @@ else
     echo "   ⚠ TradingView non trovato in /Applications — controlla il path in start.sh"
 fi
 
-# ── 5. Salva il percorso del progetto ───────────────────────────────
-echo ""
-echo "→ Salvataggio percorso progetto..."
-PROJ_DIR="$(cd "$(dirname "$0")" && pwd)"
-mkdir -p "$HOME/.mytradingguard"
-echo "$PROJ_DIR" > "$HOME/.mytradingguard/project_path"
-echo "   ✓ Percorso salvato: $PROJ_DIR"
-
 # ── Riepilogo ────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
@@ -112,7 +104,8 @@ echo "║  Setup completato!                                       ║"
 echo "║                                                          ║"
 echo "║  Come usare MyTradingGuard ogni giorno:                  ║"
 echo "║  1. Personalizza config.json con le tue regole           ║"
-echo "║  2. Apri MyTradingGuard.app — avvia tutto automaticamente║"
+echo "║  2. Esegui: bash start.sh                                ║"
+echo "║     (avvia proxy + TradingView insieme)                  ║"
 echo "║                                                          ║"
 echo "║  ✓ Il proxy di sistema NON viene modificato.             ║"
 echo "║    Solo TradingView passa dal proxy MyTradingGuard.      ║"
